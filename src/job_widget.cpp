@@ -64,12 +64,10 @@ JobWidget::JobWidget(QProcess* process, const QString& info, const QStringList& 
 
     QObject::connect(mProcess, &QProcess::readyRead, this, [=]()
     {
-        QRegExp rxSize(R"(^Transferred:\s+(\S+ \S+) \(([^)]+)\)$)");
+        QRegExp rxTransferred(R"(^Transferred:\s+(\S+) \/ (.+),\s+(\d+)\%, (\S+ \S+), ETA (.+)$)");
         QRegExp rxErrors(R"(^Errors:\s+(\S+)$)");
-        QRegExp rxChecks(R"(^Checks:\s+(\S+)$)");
-        QRegExp rxTransferred(R"(^Transferred:\s+(\S+)$)");
+        QRegExp rxChecks(R"(^Checks:\s+(.+)$)");
         QRegExp rxTime(R"(^Elapsed time:\s+(\S+)$)");
-        QRegExp rxProgress(R"(^\*([^:]+):\s*([^%]+)% done.+(ETA: [^)]+)$)");
 
         while (mProcess->canReadLine())
         {
@@ -103,31 +101,14 @@ JobWidget::JobWidget(QProcess* process, const QString& info, const QStringList& 
                 continue;
             }
 
-            if (rxSize.exactMatch(line))
+            if (rxTransferred.exactMatch(line))
             {
-                ui.size->setText(rxSize.cap(1));
-                ui.bandwidth->setText(rxSize.cap(2));
-            }
-            else if (rxErrors.exactMatch(line))
-            {
-                ui.errors->setText(rxErrors.cap(1));
-            }
-            else if (rxChecks.exactMatch(line))
-            {
-                ui.checks->setText(rxChecks.cap(1));
-            }
-            else if (rxTransferred.exactMatch(line))
-            {
+                ui.size->setText(rxTransferred.cap(2));
+                ui.bandwidth->setText(rxTransferred.cap(4));
                 ui.transferred->setText(rxTransferred.cap(1));
-            }
-            else if (rxTime.exactMatch(line))
-            {
-                ui.elapsed->setText(rxTime.cap(1));
-            }
-            else if (rxProgress.exactMatch(line))
-            {
-                QString name = rxProgress.cap(1).trimmed();
+                ui.info->setText(info % " (ETA: " % rxTransferred.cap(5) % ")");
 
+                QString name = rxTransferred.cap(3).trimmed() % "%";
                 auto it = mActive.find(name);
 
                 QLabel* label;
@@ -154,10 +135,22 @@ JobWidget::JobWidget(QProcess* process, const QString& info, const QStringList& 
                     bar = static_cast<QProgressBar*>(label->buddy());
                 }
 
-                bar->setValue(rxProgress.cap(2).toInt());
-                bar->setToolTip(rxProgress.cap(3));
+                bar->setValue(rxTransferred.cap(3).toInt());
+                bar->setToolTip(rxTransferred.cap(5));
 
                 mUpdated.insert(label);
+            }
+            else if (rxErrors.exactMatch(line))
+            {
+                ui.errors->setText(rxErrors.cap(1));
+            }
+            else if (rxChecks.exactMatch(line))
+            {
+                ui.checks->setText(rxChecks.cap(1));
+            }
+            else if (rxTime.exactMatch(line))
+            {
+                ui.elapsed->setText(rxTime.cap(1));
             }
         }
     });
